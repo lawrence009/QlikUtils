@@ -1,0 +1,16 @@
+//Subroutine to store and drop table
+
+SUB StoreAndDrop(pTableName, pPrefix)
+	
+	LET numFields = NoOfFields('$(pTableName)');
+	IF Len('$(numFields)') >0 then
+		STORE $(pTableName) into [$(pPrefix)$(pTableName).qvd];
+		DROP Table $(pTableName);
+	ELSE
+		TRACE ** Cannot Store - $(pTableName) does not exist !!! **;
+	ENDIF
+	
+	//clean up
+	LET numFields = Null();
+	
+ENDSUB 

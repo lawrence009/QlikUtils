@@ -1,0 +1,136 @@
+﻿SUB CreateCalendarFromField(pField, pCalendarName, pCalenderFieldPrefix)
+
+/************************************************************************
+
+  Create a calendar table based on an existing field.
+
+  Parameters
+  ----------
+
+  pField:               The name of the field to base the calendar on.
+  
+  pCalendarName:        The name that should be assigned to the calendar
+                        table.
+  
+  pCalendarFieldPrefix: (Optional) - A prefix to add before the field 
+  						names in the calender table. Useful when multiple
+  						calendar tables are used in the same document.
+
+
+  e.g. CALL CreateCalendarFromField('Date', 'MasterCalendar');
+
+************************************************************************/
+
+  //--- added by lawrence009 on 2014-07-13
+  MapQuarter:
+  Mapping Load * Inline [
+  Quarter,	ChangeValue
+  Q1,		Q4
+  Q2,		Q1
+  Q3,		Q2
+  Q4,		Q3
+  ];
+
+
+  //--- Initialize variables
+  LET vTable = '';
+
+  //--- Find the name of the table that the field pField resides in by
+  //    looping through all tables and fields until a match is found.
+  FOR t = 0 to NoOfTables() - 1
+    LET vTableName = TableName($(t));
+      FOR f = 1 to NoOfFields('$(vTableName)');
+        LET vFieldName = FieldName($(f), '$(vTableName)');
+    	IF '$(vFieldName)' = '$(pField)' THEN
+          LET vTable = '$(vTableName)';
+          EXIT FOR
+    	END IF
+      NEXT
+      IF '$(vTable)' <> '' THEN
+        EXIT FOR
+      END IF 
+  NEXT
+  
+  //--- Check if a table was found for the field pField in the
+  //    previous step, if found, create the calendar table.
+  IF '$(vTable)' <> '' THEN
+
+
+    //--- Select the lowest and highest date from the source field.
+    Temp_Calendar_Range:
+    LOAD
+	    Num(Min($(pField)))			as MinDate,
+	    Num(Max($(pField))) 		as MaxDate
+    RESIDENT [$(vTable)];
+
+
+    //--- Assign the start and end dates to variables, this is the
+    //    range that will be used for the calendar table.
+    LET vMinDate = Peek('MinDate', 0, 'Temp_Calendar_Range');
+    LET vMaxDate = Peek('MaxDate', 0, 'Temp_Calendar_Range');
+
+    DROP TABLE Temp_Calendar_Range; // Cleanup
+
+
+    //--- Create a calendar table containing a value for each date
+    //    vMinDate to vMaxDate  
+    [$(pCalendarName)]:
+    LOAD
+    	*,
+    	AutoNumber([$(pField)], 'Day')									as [_$(pCalenderFieldPrefix)D],	// Sequence number for days, used for point in time calculations.
+    	AutoNumber([$(pCalenderFieldPrefix)Year - week], 'Week')		as [_$(pCalenderFieldPrefix)W],	// Sequence number for weeks, used for point in time calculations.
+    	AutoNumber([$(pCalenderFieldPrefix)Year - month], 'Month')		as [_$(pCalenderFieldPrefix)M], // Sequence number for months, used for point in time calculations.
+ 		AutoNumber([$(pCalenderFieldPrefix)Year - quarter], 'Quarter')	as [_$(pCalenderFieldPrefix)Q], // Sequence number for quarters, used for point in time calculations.
+ 		AutoNumber([$(pCalenderFieldPrefix)Year], 'Year')				as [_$(pCalenderFieldPrefix)Y]  // Sequence number for years, used for point in time calculations.
+    	;
+    LOAD
+        Date(TempDate, '$(DateFormat)')									as [$(pField)],
+        WeekDay(TempDate) + 1											as [$(pCalenderFieldPrefix)Day of week],
+        DayNumberOfYear(TempDate)										as [$(pCalenderFieldPrefix)Day of year],
+        Subfield('$(DayNames)', ';', WeekDay(TempDate) + 1)				as [$(pCalenderFieldPrefix)Weekday],
+        Day(TempDate)													as [$(pCalenderFieldPrefix)Day of month],
+        Week(TempDate)													as [$(pCalenderFieldPrefix)Week number],
+	    Month(TempDate)													as [$(pCalenderFieldPrefix)Month],	
+	    Num(Month(TempDate))											as [$(pCalenderFieldPrefix)Month number],	
+	    'Q' & Ceil(Month(TempDate) / 3)			  						as [$(pCalenderFieldPrefix)Quarter],
+	    Year(TempDate)								  					as [$(pCalenderFieldPrefix)Year],	
+	    WeekYear(TempDate) & '-' & Num(Week(TempDate), '00')			as [$(pCalenderFieldPrefix)Year - week],
+	    Date(MonthStart(TempDate), 'YYYY-MMM')							as [$(pCalenderFieldPrefix)Year - month],
+	    Year(TempDate) & '-Q' & Ceil(Month(TempDate) / 3)				as [$(pCalenderFieldPrefix)Year - quarter],
+	    
+	    
+
+		//--- modified by lawrence009 on 2014-10-15
+		YearName(TempDate, 0, 4)										as [$(pCalenderFieldPrefix)Financial Year],
+		If(Month(TempDate)<4,9+Month(TempDate),Month(TempDate)-3)		as [$(pCalenderFieldPrefix)Financial Month],
+		ApplyMap('MapQuarter', 'Q' & Ceil(Month(TempDate)/3))			as [$(pCalenderFieldPrefix)Fiscal Quarter],
+		Num(Right(YearName(TempDate, 0, 4), 4))							as [$(pCalenderFieldPrefix)Fiscal Year],
+		Dual('FY'&Right(YearName(TempDate,0,4),4)&Month(TempDate),
+		     Date(MonthStart(TempDate), 'YYYY-MMM'))					as [$(pCalenderFieldPrefix)Fiscal year - month],
+		'FY'&Right(YearName(TempDate,0,4),4)&
+		     ApplyMap('MapQuarter', 'Q' & Ceil(Month(TempDate)/3))		as [$(pCalenderFieldPrefix)Fiscal year - quarter]
+	    ;
+    LOAD
+        $(vMinDate) + IterNo() - 1   									as TempDate	
+    AUTOGENERATE (1)
+    WHILE $(vMinDate) + IterNo() - 1 <= $(vMaxDate);
+    
+    TRACE >>> Created calendar table '$(pCalendarName)' based on field '$(pField)' from table '$(vTableName)'.;
+
+  ELSE
+  
+    //--- No table was found for the field pField, add an error message to the log.
+    TRACE >>> Field '$(pField)' does not exist in data model!;
+  
+  END IF
+
+  //--- Remove the temporary variables
+  LET vMinDate 		= Null();
+  LET vMaxDate 		= Null();
+  LET vTable 		= Null();
+  LET vTableName 	= Null();
+  LET vFieldName	= Null();
+  LET t 			= Null();
+  LET f				= Null();
+
+END SUB
