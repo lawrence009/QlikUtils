@@ -1,0 +1,54 @@
+﻿///$tab Load from FileList
+FOR Each Dir in DirList('$(strSrcFactDir)\*')
+
+	DirList:
+	LOAD '$(Dir)'				as Directory
+	AutoGenerate 1;
+	
+	TRACE $(Dir);		
+	FOR Each File in FileList('$(Dir)\SI*_*.csv')
+		
+		FileList:
+		LOAD '$(File)'			as File
+		AutoGenerate 1;
+
+		TRACE $(File);
+		SWITCH WildMatch('$(File)', '$(Dir)\SINA_DATA_*.csv', '$(Dir)\SIUK_REV_*.csv','$(Dir)\SINA_OMEGA_*.csv')
+		
+		CASE 1
+		TRACE ** CASE 1: CALLING SINA;
+        CALL LoadSINA('$(File)', 'SINA_Revenue');
+          		
+		CASE 2
+		TRACE **** CASE 2: CALLING SIUK;
+		CALL LoadSIUK('$(File)', 'SIUK_Revenue');
+		
+		CASE 3
+		TRACE ****** CASE 3: CALLING OMEGA;
+		CALL LoadOMEGA('$(File)', 'OMEGA_Revenue');
+		
+		ENDSWITCH
+		
+	NEXT File
+
+NEXT Dir
+
+
+IF (FieldNumber('SINA' ,'SINA_Revenue') > 0) then
+	DROP Field SINA;
+	CALL StoreAndDrop('SINA_Revenue',	'$(strXfrQvdDir)\');
+ENDIF
+IF (FieldNumber('SIUK' ,'SIUK_Revenue') > 0) then
+	DROP Field SIUK;
+	CALL StoreAndDrop('SIUK_Revenue',	'$(strXfrQvdDir)\');
+ENDIF
+IF (FieldNumber('OMEGA' ,'OMEGA_Revenue') > 0) then
+	DROP Field OMEGA;
+	CALL StoreAndDrop('OMEGA_Revenue',	'$(strXfrQvdDir)\');
+ENDIF
+
+
+//clean up
+LET Dir		= Null();
+LET File	= Null();
+DROP Tables	DirList, FileList;
