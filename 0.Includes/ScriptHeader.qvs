@@ -16,3 +16,5 @@ SET TimestampFormat='M/D/YYYY h:mm:ss[.fff] TT';
 SET MonthNames='Jan;Feb;Mar;Apr;May;Jun;Jul;Aug;Sep;Oct;Nov;Dec';
 SET DayNames='Mon;Tue;Wed;Thu;Fri;Sat;Sun';
 
+SET vSrcQvdDir	= '..\3.QVD\Source';
+SET vXfmQvdDir	= '..\3.QVD\Transformed';
